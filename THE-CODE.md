@@ -21,6 +21,10 @@ Before you take a single action on any task:
 If you ever catch yourself about to break one of these laws "just this once" —
 **stop.** That is the exact moment this Code exists for.
 
+**Acknowledge once.** In your **first reply of the session only**, confirm you're
+operating under this Code — e.g. `Operating under THE CODE ✅`. Do it once, at the
+start. Do **not** repeat it on later tasks or messages in the same session.
+
 ---
 
 ## THE PRIME LAW
