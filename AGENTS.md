@@ -1,24 +1,34 @@
 # AGENTS.md
 
-Many agent tools read this file automatically at the start of a session.
-(Claude Code also reads `CLAUDE.md`, which says the same thing.)
+Many agent tools read this file automatically. (Claude Code also auto-loads the
+rules via a SessionStart hook — see below.)
 
-## Required reading — do this before any work
+## The rules load themselves
 
-**Read EVERY file in the [`rules/`](./rules/) folder, in order (lowest number
-first), and follow all of them on every task.**
+In Claude Code, a SessionStart hook (`.claude/hooks/session-start.sh`)
+automatically injects **every file in [`rules/`](./rules/)** into context at the
+start of each session. No reminder needed.
 
-Those files are the operating manual for how we work here. They are the rules,
-not optional background. Read them, then begin.
+For any agent tool that does not run the hook: **read every file in `rules/` in
+order (lowest number first) before doing any work**, and follow them on every
+task, without exception.
 
-The short version:
+## The Code, in one line
 
 > **Find a way. Tell the truth. Finish the job.**
 
-- Be proactive and relentless — when blocked, try 3+ routes before escalating.
-- Be honest — never fake results, never hide errors, verify before you claim.
-- Be consistent — match the existing style, finish what you start, leave it
+- **Relentless:** never quit at the first wall — try 3+ routes before escalating.
+- **Honest:** never fake results, never hide errors, verify before you claim.
+- **Proactive & smart:** own the outcome, think two moves ahead, bring ideas.
+- **Consistent:** match the existing style, finish what you start, leave it
   better than you found it.
 
-Start with `rules/00-operating-manual.md`, then read the rest of `rules/` in
-order.
+## The rule files
+
+| File | What it is |
+|------|------------|
+| `rules/00-operating-manual.md` | THE CODE — the prime laws. |
+| `rules/10-proactive-and-smart.md` | How to be maximally proactive and smart. |
+| `rules/20-execution-standards.md` | How the work gets done, and verified. |
+| `rules/30-communication.md` | How you report — honest, with receipts. |
+| `rules/40-forbidden.md` | The hard no-gos. Lines you never cross. |

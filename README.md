@@ -1,46 +1,51 @@
-# Agent Operating Manual
+# The Warband Code
 
-This repo holds **the rules your AI agents read before they work** — so every
-agent behaves the same way: proactive, relentless, honest, and consistent.
+The rules your AI agents live by — **loaded automatically, every session**, so
+every agent is relentless, honest, proactive, and consistent without you ever
+having to remind them.
 
-## How it works
+## It loads itself
 
-Two entry-point files tell agents what to do, and they're picked up
-automatically:
+A **SessionStart hook** (`.claude/hooks/session-start.sh`) injects every rule
+file into the agent's context at the start of each Claude Code session. You don't
+tell the agent to read anything — the rules are just there, every time.
 
-- **`CLAUDE.md`** — read automatically by Claude Code.
-- **`AGENTS.md`** — read automatically by many other agent tools.
+Two backup entry points cover other tools:
+- **`CLAUDE.md`** — read by Claude Code.
+- **`AGENTS.md`** — read by many other agent tools.
 
-Both say the same thing: **read every file in the [`rules/`](./rules/) folder,
-in order, before doing any work.**
+Both also say: if the hook didn't run, read everything in `rules/` first.
 
-So the actual rules live in `rules/`, and you can have as many as you want.
-
-## The `rules/` folder
-
-Files are read **in order, every time**, lowest number first:
+## The rules (`rules/`, read in number order)
 
 | File | What it is |
 |------|------------|
-| `00-operating-manual.md` | The core rulebook. The "book" agents read to learn how things are done. Keep this first. |
-| `10-example-add-your-own.md` | An example showing how to add your own rule files. |
+| `00-operating-manual.md` | **THE CODE** — the prime laws (find a way / tell the truth / finish). |
+| `10-proactive-and-smart.md` | How to be maximally proactive and smart. |
+| `20-execution-standards.md` | How the work gets done, and verified. |
+| `30-communication.md` | How agents report — honest, with receipts. |
+| `40-forbidden.md` | The hard no-gos. Lines never crossed. |
 
-## Adding your own always-read files
+## Adding your own always-read rules
 
-This is the whole point — you can have a few (or many) files that agents read
-every time:
+1. Drop a new `.md` into `rules/` (e.g. `25-coding-style.md`, `35-project-facts.md`).
+2. Number it to set read order. Leave gaps (10, 20, 30) so you can slot new files
+   in between later.
+3. Write it in plain language.
 
-1. Create a new `.md` file inside `rules/`.
-2. Prefix it with a number to set its read order, e.g. `20-coding-style.md`.
-   (Leave gaps — 10, 20, 30 — so you can slot new ones in between later.)
-3. Write your rules in plain language.
-
-That's it. Drop it in, it's live. No other setup.
+The hook reads the whole folder, so anything you add is auto-loaded next session.
+No other setup.
 
 ## The core idea
 
 > **Find a way. Tell the truth. Finish the job.**
 
-Agents that are *relentless* (find a way around any wall) **and** *honest* (never
-fake it, always verify) are the ones you can trust to build great things
-consistently. That's what these rules train them to be.
+Relentless (find a route around any wall) **and** honest (never fake it, always
+verify). That combination is what makes agents you can actually trust to build
+great things, consistently.
+
+## To activate it in a project
+
+Copy this repo's `rules/`, `.claude/`, `CLAUDE.md`, and `AGENTS.md` into the
+project root. Once the SessionStart hook is on your default branch, every future
+Claude Code session loads the code automatically.
