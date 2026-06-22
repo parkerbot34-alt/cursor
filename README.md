@@ -1,25 +1,41 @@
 # Agent Operating Manual
 
-This repo holds **the rulebook your AI agents read before they work** — so every
+This repo holds **the rules your AI agents read before they work** — so every
 agent behaves the same way: proactive, relentless, honest, and consistent.
 
-## The files
+## How it works
+
+Two entry-point files tell agents what to do, and they're picked up
+automatically:
+
+- **`CLAUDE.md`** — read automatically by Claude Code.
+- **`AGENTS.md`** — read automatically by many other agent tools.
+
+Both say the same thing: **read every file in the [`rules/`](./rules/) folder,
+in order, before doing any work.**
+
+So the actual rules live in `rules/`, and you can have as many as you want.
+
+## The `rules/` folder
+
+Files are read **in order, every time**, lowest number first:
 
 | File | What it is |
 |------|------------|
-| **[`AGENTS.md`](./AGENTS.md)** | The full operating manual. The "book" agents read to learn how things are done here. This is the real one. |
-| **[`CLAUDE.md`](./CLAUDE.md)** | A short pointer that Claude Code reads automatically at session start. It tells the agent to go read `AGENTS.md`. |
+| `00-operating-manual.md` | The core rulebook. The "book" agents read to learn how things are done. Keep this first. |
+| `10-example-add-your-own.md` | An example showing how to add your own rule files. |
 
-## How to use it
+## Adding your own always-read files
 
-1. **Drop these files in the root of any project** you want your agents to work
-   on. Claude Code picks up `CLAUDE.md` automatically; many other agent tools
-   pick up `AGENTS.md` automatically.
-2. **Point your agents at it.** When you kick off an agent, you can also just say:
-   *"Read AGENTS.md and follow it."*
-3. **Edit it as you learn.** This is a living document. When you discover a rule
-   that makes your agents better, add it. When one isn't working, change it.
-   The more specific to *your* way of working it gets, the better your agents get.
+This is the whole point — you can have a few (or many) files that agents read
+every time:
+
+1. Create a new `.md` file inside `rules/`.
+2. Prefix it with a number to set its read order, e.g. `20-coding-style.md`.
+   (Leave gaps — 10, 20, 30 — so you can slot new ones in between later.)
+3. Write your rules in plain language.
+
+That's it. Drop it in, it's live. No other setup.
 
 ## The core idea
 
@@ -27,4 +43,4 @@ agent behaves the same way: proactive, relentless, honest, and consistent.
 
 Agents that are *relentless* (find a way around any wall) **and** *honest* (never
 fake it, always verify) are the ones you can trust to build great things
-consistently. That's what this rulebook trains them to be.
+consistently. That's what these rules train them to be.

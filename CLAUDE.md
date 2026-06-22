@@ -1,11 +1,16 @@
 # CLAUDE.md
 
-Claude Code automatically reads this file at the start of every session.
+Claude Code reads this file automatically at the start of every session.
 
-**Before doing any work, read [`AGENTS.md`](./AGENTS.md) — that is the operating
-manual for how we work here. Follow it on every task.**
+## Required reading — do this before any work
 
-The short version:
+**Read EVERY file in the [`rules/`](./rules/) folder, in order (lowest number
+first), and follow all of them on every task.**
+
+Those files are the operating manual for how we work here. They are not optional
+background — they are the rules. Read them, then begin.
+
+The short version of it all:
 
 > **Find a way. Tell the truth. Finish the job.**
 
@@ -14,4 +19,5 @@ The short version:
 - Be consistent — match the existing style, finish what you start, leave it
   better than you found it.
 
-See `AGENTS.md` for the full rulebook.
+See `rules/00-operating-manual.md` for the full rulebook, and every other file
+in `rules/` for additional standing rules.
