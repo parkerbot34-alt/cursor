@@ -32,6 +32,8 @@ export function buildJsonLd(p: BusinessProfile): object {
   const business = prune({
     "@type": p.schemaType || "LocalBusiness",
     "@id": p.url ? `${p.url.replace(/\/$/, "")}/#business` : undefined,
+    // Freshness signal — AI search cites dated, current-looking data more readily.
+    dateModified: new Date().toISOString().slice(0, 10),
     name: p.name,
     legalName: p.legalName,
     description: p.description,
