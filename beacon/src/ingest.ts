@@ -2,8 +2,15 @@
 // BusinessProfile. Dependency-free extraction — good enough to seed a profile,
 // and intentionally honest about what it could and couldn't find (see sources).
 
-import type { BusinessProfile } from "./types.ts";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import type { BusinessProfile, FAQ, Service } from "./types.ts";
 import { collapseWhitespace, decodeEntities } from "./util.ts";
+
+export interface LoadedPage {
+  ref: string; // url or file path the page came from
+  html: string;
+}
 
 export interface IngestResult {
   profile: Partial<BusinessProfile>;
@@ -132,8 +139,12 @@ export function extractFromHtml(html: string, url: string): IngestResult {
   const tel = firstMatch(html, /tel:([+\d().\-\s]{7,})/i);
   if (tel && !profile.phone) profile.phone = collapseWhitespace(tel);
 
-  // Headings give us a rough sense of services offered.
-  const h2 = pickHeadings(html, "h2", 12);
+  // Headings give us a rough sense of services offered. Filter out headings
+  // that are clearly navigational/boilerplate rather than offerings — this is
+  // best-effort, so anything that slips through is flagged for human review.
+  const NON_SERVICE =
+    /^(home|about( us)?|who we are|our (team|story|story so far)|contact( us)?|get in touch|testimonials?|reviews?|faqs?|frequently asked|blog|news|gallery|why (choose|us)|meet the team|careers|privacy|terms|sitemap|menu|search|sign in|log ?in|subscribe|newsletter|follow us)\b/i;
+  const h2 = pickHeadings(html, "h2", 12).filter((h) => !NON_SERVICE.test(h));
   if (h2.length) {
     notes.push(`Captured ${h2.length} section heading(s) as candidate services — review before publishing.`);
     profile.services = h2.map((name) => ({ name }));
@@ -141,6 +152,105 @@ export function extractFromHtml(html: string, url: string): IngestResult {
 
   if (!profile.name) notes.push("WARNING: could not determine business name — supply it via --facts.");
 
+  return { profile, notes };
+}
+
+// Load one or more pages from whatever the operator dropped in:
+//   - a folder of a saved/exported website (every .html page is read)
+//   - a single .html file or file:// URL
+//   - a live http(s) URL (crawled, unless doFetch is false)
+// This is the "drop the website into the tool" path — reading the real files is
+// far more reliable than crawling, and works with no network at all.
+export async function loadPages(
+  input: string,
+  doFetch: boolean,
+): Promise<{ pages: LoadedPage[]; notes: string[] }> {
+  const notes: string[] = [];
+  const isHttp = /^https?:\/\//i.test(input);
+
+  // Local path that exists on disk — could be a folder (whole site) or a file.
+  if (!isHttp && !input.startsWith("file://")) {
+    let info: Awaited<ReturnType<typeof stat>> | null = null;
+    try {
+      info = await stat(input);
+    } catch {
+      info = null;
+    }
+    if (info?.isDirectory()) {
+      const entries = await readdir(input, { recursive: true });
+      const htmlFiles = entries
+        .map((e) => String(e))
+        .filter((f) => /\.html?$/i.test(f))
+        // Home page first so its facts take precedence during combining.
+        .sort((a, b) => homeRank(b) - homeRank(a));
+      const pages: LoadedPage[] = [];
+      for (const f of htmlFiles) {
+        try {
+          pages.push({ ref: f, html: await readFile(join(input, f), "utf8") });
+        } catch {
+          /* skip unreadable file */
+        }
+      }
+      notes.push(`Loaded ${pages.length} page(s) from folder "${input}".`);
+      return { pages, notes };
+    }
+  }
+
+  // Single file, file:// URL, or a live URL we're allowed to fetch.
+  if (!isHttp || doFetch) {
+    const html = await fetchHtml(input);
+    if (html) return { pages: [{ ref: input, html }], notes };
+    notes.push(`Could not load ${input} (network gated or path missing). Building from facts only.`);
+  }
+  return { pages: [], notes };
+}
+
+function homeRank(path: string): number {
+  return /(^|\/)index\.html?$/i.test(path) ? 1 : 0;
+}
+
+// Combine extractions from many pages of one site into a single profile.
+// Scalars: first non-empty wins (home page is processed first, so it leads).
+// Collections (services, FAQs, products): unioned across pages, de-duplicated.
+export function combineExtractions(results: IngestResult[], canonicalUrl?: string): IngestResult {
+  const profile: Partial<BusinessProfile> = {};
+  const notes: string[] = [];
+  const services = new Map<string, Service>();
+  const faqs = new Map<string, FAQ>();
+  const sources: string[] = [];
+
+  const scalarKeys = [
+    "name",
+    "description",
+    "tagline",
+    "email",
+    "phone",
+    "priceRange",
+    "schemaType",
+    "logo",
+  ] as const;
+
+  for (const r of results) {
+    const p = r.profile;
+    for (const k of scalarKeys) if (!profile[k] && p[k]) (profile as any)[k] = p[k];
+    if (!profile.address && p.address) profile.address = p.address;
+    if (!profile.keywords && p.keywords) profile.keywords = p.keywords;
+    for (const s of p.services ?? []) {
+      const key = s.name.toLowerCase();
+      if (!services.has(key)) services.set(key, s);
+    }
+    for (const f of p.faqs ?? []) {
+      const key = f.question.toLowerCase();
+      if (!faqs.has(key)) faqs.set(key, f);
+    }
+    sources.push(...(p.sources ?? []));
+    notes.push(...r.notes);
+  }
+
+  if (services.size) profile.services = [...services.values()];
+  if (faqs.size) profile.faqs = [...faqs.values()];
+  profile.sources = [...new Set(sources)];
+  if (canonicalUrl) profile.url = canonicalUrl;
   return { profile, notes };
 }
 

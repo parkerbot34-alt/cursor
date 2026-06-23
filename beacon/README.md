@@ -43,19 +43,28 @@ customer's behalf. That's the "make money from AI" half of the pitch.
 
 Requires **Node ≥ 22.6** (runs TypeScript natively — no install, no build step).
 
+The input can be a **whole website folder** (most reliable — you "drop the site
+in"), a single saved HTML file, or a live URL to crawl:
+
 ```bash
-# Companion site from a live URL, enriched with asserted facts
-node src/cli.ts https://acme.example --mode companion --facts facts.json --out out/acme
+# Drop in a whole exported website folder and rebuild it agent-friendly
+node src/cli.ts ./acme-website-export --mode upgrade --out out/acme
 
-# Upgrade an existing site (crawl + rebuild)
-node src/cli.ts https://acme.example --mode upgrade --out out/acme
+# Drop in the folder + add extra facts, build a separate agent-only site
+node src/cli.ts ./acme-website-export --facts facts.json --mode companion --out out/acme
 
-# Build purely from facts, no network
+# Or crawl a live URL
+node src/cli.ts https://acme.example --mode companion --out out/acme
+
+# Or build purely from facts, no website at all
 node src/cli.ts --facts examples/sample-business.json --no-fetch --out out/demo
 ```
 
-The `<url>` may be a live `http(s)` URL or a local/`file://` HTML path (handy when
-crawling is blocked — just save the page first).
+**Why drop the site in instead of giving a link?** A bare link forces a crawl,
+which can fail or be blocked. Handing Beacon the actual files (a saved page or an
+exported site folder) is reliable and needs no network — it reads every `.html`
+page, aggregates the facts across them into one profile, then rewrites. A live
+`http(s)` URL still works when crawling is available; a `file://` path works too.
 
 ### Facts file
 

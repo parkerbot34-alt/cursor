@@ -16,7 +16,7 @@
 
 import { readFile } from "node:fs/promises";
 import type { BuildMode, BusinessProfile } from "./types.ts";
-import { extractFromHtml, fetchHtml, mergeProfiles } from "./ingest.ts";
+import { combineExtractions, extractFromHtml, loadPages, mergeProfiles } from "./ingest.ts";
 import { assembleBundle, writeBundle } from "./build.ts";
 
 interface Args {
@@ -55,13 +55,20 @@ function printHelp(): void {
   console.log(`Beacon — build a website that an AI agent can actually read and act on.
 
 Usage:
-  node src/cli.ts <url> [--mode companion|upgrade] [--facts facts.json] [--out dir] [--no-fetch]
+  node src/cli.ts <input> [--mode companion|upgrade] [--facts facts.json] [--out dir] [--no-fetch]
+
+<input> can be:
+  • a folder  — a saved/exported website; every .html page is read & aggregated
+  • a file    — a single saved .html page (or file:// URL)
+  • a URL     — a live http(s) site to crawl
 
 Modes:
   companion  Separate agent-only site alongside the existing human site (default)
   upgrade    Rebuild the existing site into an agent-friendly version
 
 Examples:
+  node src/cli.ts ./acme-website-export --mode upgrade --out out/acme
+  node src/cli.ts ./acme-website-export --facts extra.json --mode companion --out out/acme
   node src/cli.ts https://acme.example --mode companion --out out/acme
   node src/cli.ts --facts examples/sample-business.json --no-fetch --out out/demo
 `);
@@ -79,21 +86,25 @@ async function main(): Promise<void> {
   let profile: Partial<BusinessProfile> = {};
   const notes: string[] = [];
 
-  if (args.url && args.fetch) {
-    process.stderr.write(`Crawling ${args.url} …\n`);
-    const html = await fetchHtml(args.url);
-    if (html) {
-      const res = extractFromHtml(html, args.url);
-      profile = res.profile;
-      notes.push(...res.notes);
+  if (args.url) {
+    const isHttp = /^https?:\/\//i.test(args.url);
+    if (isHttp && args.fetch) process.stderr.write(`Crawling ${args.url} …\n`);
+    else if (!isHttp) process.stderr.write(`Reading dropped-in site: ${args.url} …\n`);
+
+    const { pages, notes: loadNotes } = await loadPages(args.url, args.fetch);
+    notes.push(...loadNotes);
+
+    if (pages.length) {
+      const results = pages.map((pg) => extractFromHtml(pg.html, pg.ref));
+      const combined = combineExtractions(results, isHttp ? args.url : undefined);
+      profile = combined.profile;
+      notes.push(...combined.notes);
+      if (pages.length > 1) {
+        notes.push(`Aggregated facts across ${pages.length} pages into one profile.`);
+      }
     } else {
-      notes.push(
-        `Could not fetch ${args.url} (network gated or site unavailable). Building from facts only.`,
-      );
-      profile = { url: args.url, sources: [`crawl-failed:${args.url}`] };
+      profile = { url: isHttp ? args.url : undefined, sources: [`load-failed:${args.url}`] };
     }
-  } else if (args.url) {
-    profile = { url: args.url, sources: [`url:${args.url}`] };
   }
 
   if (args.facts) {
