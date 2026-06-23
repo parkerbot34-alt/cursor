@@ -78,7 +78,19 @@ degrades gracefully without one.)
   into an agent-friendly version that still works for humans but is now fully
   legible and transactable for AI.
 
-## Usage
+## Quick start: the web UI
+
+The easiest way to build one site — no command line:
+
+```bash
+npm run ui          # → http://localhost:4173
+```
+
+Open it, then: pick a **mode** (companion / upgrade), paste the website's HTML
+(or enter a **URL**), optionally add **facts** as JSON, and hit **Build**. You get
+the agent-readiness score and clickable links to preview the generated site.
+
+## Usage (CLI)
 
 Requires **Node ≥ 22.6** (runs TypeScript natively — no install, no build step).
 
