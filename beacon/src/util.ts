@@ -57,3 +57,14 @@ export function decodeEntities(s: string): string {
 export function collapseWhitespace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
+
+// Strip a page down to readable text: drop script/style/noscript, remove tags,
+// decode entities, collapse whitespace. Good enough to feed an LLM as context.
+export function htmlToText(html: string): string {
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
+  const text = withoutScripts.replace(/<[^>]+>/g, " ");
+  return collapseWhitespace(decodeEntities(text));
+}

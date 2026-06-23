@@ -17,7 +17,9 @@
 import { readFile } from "node:fs/promises";
 import type { BuildMode, BusinessProfile } from "./types.ts";
 import { combineExtractions, extractFromHtml, loadPages, mergeProfiles } from "./ingest.ts";
+import { enrichProfile } from "./enrich.ts";
 import { assembleBundle, writeBundle } from "./build.ts";
+import { htmlToText } from "./util.ts";
 
 interface Args {
   url?: string;
@@ -25,16 +27,18 @@ interface Args {
   facts?: string;
   out: string;
   fetch: boolean;
+  enrich: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { mode: "companion", out: "out", fetch: true };
+  const args: Args = { mode: "companion", out: "out", fetch: true, enrich: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--mode") args.mode = argv[++i] as BuildMode;
     else if (a === "--facts") args.facts = argv[++i];
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--no-fetch") args.fetch = false;
+    else if (a === "--enrich") args.enrich = true;
     else if (a === "-h" || a === "--help") {
       printHelp();
       process.exit(0);
@@ -65,6 +69,11 @@ Usage:
 Modes:
   companion  Separate agent-only site alongside the existing human site (default)
   upgrade    Rebuild the existing site into an agent-friendly version
+
+Options:
+  --enrich   Use Claude to clean the crawled content into a polished profile
+             (needs ANTHROPIC_API_KEY + \`npm install\`; falls back to the
+             deterministic output if unavailable). Facts still win over it.
 
 Examples:
   node src/cli.ts ./acme-website-export --mode upgrade --out out/acme
@@ -102,9 +111,20 @@ async function main(): Promise<void> {
       if (pages.length > 1) {
         notes.push(`Aggregated facts across ${pages.length} pages into one profile.`);
       }
+
+      // Enrich the crawl BEFORE facts are merged, so asserted facts win.
+      if (args.enrich) {
+        process.stderr.write("Enriching with Claude …\n");
+        const pageText = pages.map((pg) => htmlToText(pg.html)).join("\n\n");
+        const { profile: enriched, notes: enrichNotes } = await enrichProfile(profile, pageText);
+        profile = enriched;
+        notes.push(...enrichNotes);
+      }
     } else {
       profile = { url: isHttp ? args.url : undefined, sources: [`load-failed:${args.url}`] };
     }
+  } else if (args.enrich) {
+    notes.push("Enrichment needs a website to read (a URL, file, or folder); skipped for facts-only build.");
   }
 
   if (args.facts) {

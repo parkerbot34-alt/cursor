@@ -60,6 +60,27 @@ node src/cli.ts https://acme.example --mode companion --out out/acme
 node src/cli.ts --facts examples/sample-business.json --no-fetch --out out/demo
 ```
 
+### Optional: `--enrich` (Claude clean-up pass)
+
+Raw HTML extraction captures headings and meta tags but can't *write*. The
+`--enrich` flag hands the crawled facts + page text to Claude (`claude-opus-4-8`)
+and gets back a polished description, a clean service list, and an FAQ — turning a
+messy real website into a finished agent-ready profile.
+
+```bash
+npm install   # one-time: pulls @anthropic-ai/sdk (optional dependency)
+export ANTHROPIC_API_KEY=sk-ant-...
+node src/cli.ts ./acme-website-export --mode companion --enrich --out out/acme
+```
+
+- **Optional & non-blocking.** Beacon's core stays zero-dependency. If the SDK
+  isn't installed or `ANTHROPIC_API_KEY` is unset, enrichment is skipped and the
+  deterministic output stands — the build never fails for lack of it.
+- **Honest by construction.** The model is instructed to reorganize only facts
+  present on the site and never invent details (prices, phone numbers, claims).
+- **Facts still win.** Enrichment runs on the crawl *before* your `--facts` are
+  merged, so anything you assert overrides the model.
+
 **Why drop the site in instead of giving a link?** A bare link forces a crawl,
 which can fail or be blocked. Handing Beacon the actual files (a saved page or an
 exported site folder) is reliable and needs no network — it reads every `.html`
@@ -94,7 +115,7 @@ statically-hostable bundle. Verified end-to-end on the bundled examples.
 ### Roadmap ideas
 
 - Smarter extraction (cheerio/readability) and richer service/product detection
-- LLM-assisted content enrichment (write the `description`/FAQ from sparse facts)
+- ~~LLM-assisted content enrichment~~ — done, see `--enrich` above
 - A live MCP server per business so agents can call actions directly
 - `agents.json` execution layer (actually perform quotes/bookings)
 - Deploy command (push the bundle to Vercel/Netlify/S3)
