@@ -1,0 +1,27 @@
+{
+  "name": "beacon",
+  "version": "0.1.0",
+  "description": "Build a website that an AI agent can actually read and act on. Agent-first sites for businesses.",
+  "type": "module",
+  "bin": {
+    "beacon": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/cli.ts",
+    "demo": "node src/cli.ts --facts examples/sample-business.json --no-fetch --out out/demo",
+    "demo:ingest": "node src/cli.ts examples/fixture-site.html --mode upgrade --out out/ingest-demo"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "llms-txt",
+    "schema-org",
+    "structured-data",
+    "agentic-web",
+    "seo"
+  ],
+  "license": "MIT"
+}
