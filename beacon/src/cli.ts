@@ -14,11 +14,13 @@
 //
 // Either a <url> or --facts (or both) is required.
 
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { BuildMode, BusinessProfile } from "./types.ts";
 import { combineExtractions, extractFromHtml, loadPages, mergeProfiles } from "./ingest.ts";
 import { enrichProfile } from "./enrich.ts";
 import { assembleBundle, writeBundle } from "./build.ts";
+import { auditBundle, auditRawSite, renderReport } from "./audit.ts";
 import { htmlToText } from "./util.ts";
 
 interface Args {
@@ -94,6 +96,7 @@ async function main(): Promise<void> {
 
   let profile: Partial<BusinessProfile> = {};
   const notes: string[] = [];
+  let sourceHtml: string[] = []; // raw original pages, for the "before" audit
 
   if (args.url) {
     const isHttp = /^https?:\/\//i.test(args.url);
@@ -102,6 +105,7 @@ async function main(): Promise<void> {
 
     const { pages, notes: loadNotes } = await loadPages(args.url, args.fetch);
     notes.push(...loadNotes);
+    sourceHtml = pages.map((pg) => pg.html);
 
     if (pages.length) {
       const results = pages.map((pg) => extractFromHtml(pg.html, pg.ref));
@@ -147,10 +151,27 @@ async function main(): Promise<void> {
   const files = assembleBundle(final, args.mode);
   await writeBundle(files, args.out);
 
+  // Agent-readiness proof: score the Beacon site, and the original if we have it.
+  const beaconReport = auditBundle(files, final);
+  const beforeReport = sourceHtml.length ? auditRawSite(sourceHtml) : undefined;
+  const report = renderReport(beaconReport, beforeReport);
+  await writeFile(join(args.out, "beacon-report.md"), report, "utf8");
+  await writeFile(
+    join(args.out, "beacon-report.json"),
+    JSON.stringify({ before: beforeReport, after: beaconReport }, null, 2),
+    "utf8",
+  );
+
   process.stderr.write("\n");
   for (const n of notes) process.stderr.write(`  • ${n}\n`);
   process.stderr.write(`\n✓ Built ${files.length} files (mode: ${args.mode}) → ${args.out}/\n`);
   for (const f of files) process.stderr.write(`    ${args.out}/${f.path}\n`);
+  process.stderr.write(`    ${args.out}/beacon-report.md\n`);
+  if (beforeReport) {
+    process.stderr.write(`\n  ★ Agent-readiness: ${beforeReport.score}/100 (current site) → ${beaconReport.score}/100 (Beacon)\n`);
+  } else {
+    process.stderr.write(`\n  ★ Agent-readiness score: ${beaconReport.score}/100\n`);
+  }
 }
 
 main().catch((err) => {

@@ -29,6 +29,21 @@ Discoverability tells an AI the business exists. The `agents.json` **actions
 manifest** is the transactability layer — it lets an agent do business on a
 customer's behalf. That's the "make money from AI" half of the pitch.
 
+## Proof: the agent-readiness score
+
+Every build writes a **`beacon-report.md`** — a before/after audit grading the
+business on what actually determines whether an AI can find, read, understand,
+cite, and act on it. Point Beacon at the current site and it scores both:
+
+```
+★ Agent-readiness: 4/100 (current site) → 92/100 (Beacon)
+```
+
+Each check (JSON-LD, `llms.txt`, content-in-raw-HTML, JSON API, `agents.json`
+actions, crawl signals, discovery hints) is graded with the reason an agent cares,
+plus the token-cost saving for an agent to read the business. Deterministic —
+nothing to take on faith. This is the artifact you put in front of a prospect.
+
 ## Two modes
 
 - **`companion`** *(default)* — point Beacon at a business's existing site (plus any
