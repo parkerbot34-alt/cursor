@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon — build an AI-readable site (standalone)</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: .25rem; } .sub { color: #888; margin-top: 0; }
+  fieldset { border: 1px solid #8884; border-radius: 8px; margin: 1rem 0; padding: 1rem; }
+  legend { font-weight: 600; padding: 0 .4rem; }
+  label { display: block; margin: .5rem 0 .2rem; font-weight: 500; }
+  textarea, input[type=text] { width: 100%; padding: .5rem; border: 1px solid #8886; border-radius: 6px; font: inherit; background: transparent; color: inherit; }
+  textarea { min-height: 7rem; font-family: ui-monospace, monospace; font-size: 13px; }
+  .modes label { display: inline-flex; align-items: center; gap: .4rem; font-weight: 500; margin-right: 1.5rem; }
+  button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: .6rem 1.2rem; font: inherit; font-weight: 600; cursor: pointer; }
+  .score { font-size: 2.4rem; font-weight: 700; }
+  .err { background: #ef44441a; border: 1px solid #ef4444; border-radius: 6px; padding: .75rem 1rem; }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+  th, td { border-bottom: 1px solid #8883; padding: .35rem .5rem; text-align: left; }
+  .tabs { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: 1rem; }
+  .tabs button { background: #8882; color: inherit; font-weight: 500; padding: .35rem .7rem; }
+  .tabs button.active { background: #2563eb; color: #fff; }
+  pre { background: #8881; padding: 1rem; border-radius: 6px; overflow: auto; max-height: 460px; font-size: 13px; }
+  .hide { display: none; }
+  .hint { color: #888; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>Beacon</h1>
+<p class="sub">Build a website an AI agent can actually read — and act on. <strong>Runs entirely in your browser</strong> — no install.</p>
+
+<fieldset>
+  <legend>1. Mode</legend>
+  <div class="modes">
+    <label><input type="radio" name="mode" value="companion" checked> Companion — a separate agent-only site</label>
+    <label><input type="radio" name="mode" value="upgrade"> Upgrade — rebuild the existing site agent-friendly</label>
+  </div>
+</fieldset>
+<fieldset>
+  <legend>2. The website</legend>
+  <label for="html">Paste the website's HTML <span class="hint">(in the browser: View Source → Select All → Copy)</span></label>
+  <textarea id="html" placeholder="&lt;!DOCTYPE html&gt;&lt;html&gt;…"></textarea>
+  <p class="hint">Crawling a live URL needs the full tool (browsers block cross-site fetches). Pasting HTML works great here.</p>
+</fieldset>
+<fieldset>
+  <legend>3. Facts (optional JSON — always wins over the page)</legend>
+  <textarea id="facts" placeholder='{ "name": "Acme Co.", "phone": "+1-555-0100", "services": [{ "name": "Repairs", "price": "from $99" }] }'></textarea>
+</fieldset>
+<button id="build">Build the AI-ready site →</button>
+
+<div id="result"></div>
+
+<script>
+"use strict";
+
+// ---------- helpers ----------
+function escapeHtml(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+function collapse(s){return String(s).replace(/\s+/g," ").trim();}
+function prune(o){
+  if(Array.isArray(o)){const a=o.map(prune).filter(v=>v!==undefined&&v!==null&&!(typeof v==="string"&&v===""));return a;}
+  if(o&&typeof o==="object"){const out={};for(const[k,v]of Object.entries(o)){const p=prune(v);const empty=p===undefined||p===null||(typeof p==="string"&&p==="")||(Array.isArray(p)&&p.length===0)||(typeof p==="object"&&!Array.isArray(p)&&Object.keys(p).length===0);if(!empty)out[k]=p;}return out;}
+  return o;
+}
+function htmlToText(html){
+  const d=new DOMParser().parseFromString(html,"text/html");
+  d.querySelectorAll("script,style,noscript").forEach(e=>e.remove());
+  return collapse(d.body?d.body.textContent:"");
+}
+const NON_SERVICE=/^(home|about( us)?|who we are|our (team|story)|contact( us)?|get in touch|testimonials?|reviews?|faqs?|frequently asked|blog|news|gallery|why (choose|us)|meet the team|careers|privacy|terms|sitemap|menu|search|sign in|log ?in|subscribe|newsletter|follow us)\b/i;
+
+// ---------- extraction (browser DOM) ----------
+function extract(html){
+  const d=new DOMParser().parseFromString(html,"text/html");
+  const p={sources:["pasted-html"]};
+  const meta=(sel)=>{const m=d.querySelector(sel);return m?collapse(m.getAttribute("content")||""):"";};
+  // existing JSON-LD
+  let org=null;
+  d.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{
+    try{let j=JSON.parse(s.textContent);const arr=Array.isArray(j)?j:(j["@graph"]||[j]);
+      for(const n of arr){if(/Organization|LocalBusiness|Store|Restaurant|ProfessionalService|Service/i.test(String(n["@type"]))&&!org)org=n;}
+    }catch(e){}
+  });
+  if(org){
+    if(org.name)p.name=org.name;
+    if(org.description)p.description=org.description;
+    if(org.telephone)p.phone=org.telephone;
+    if(org.email)p.email=String(org.email).replace(/^mailto:/,"");
+    if(org.priceRange)p.priceRange=org.priceRange;
+    if(typeof org["@type"]==="string")p.schemaType=org["@type"];
+    if(org.address&&typeof org.address==="object")p.address={street:org.address.streetAddress,city:org.address.addressLocality,region:org.address.addressRegion,postalCode:org.address.postalCode,country:org.address.addressCountry};
+  }
+  p.name=p.name||meta('meta[property="og:site_name"]')||collapse(d.querySelector("title")?d.querySelector("title").textContent:"");
+  p.description=p.description||meta('meta[name="description"]')||meta('meta[property="og:description"]');
+  p.tagline=p.tagline||meta('meta[property="og:title"]');
+  const kw=meta('meta[name="keywords"]'); if(kw)p.keywords=kw.split(",").map(s=>s.trim()).filter(Boolean);
+  // contact from body
+  const mailto=d.querySelector('a[href^="mailto:"]'); if(mailto&&!p.email)p.email=mailto.getAttribute("href").slice(7).split("?")[0];
+  const tel=d.querySelector('a[href^="tel:"]'); if(tel&&!p.phone)p.phone=collapse(tel.getAttribute("href").slice(4));
+  if(!p.email){const m=html.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i); if(m)p.email=m[1];}
+  // services from h2
+  const h2=[...d.querySelectorAll("h2")].map(e=>collapse(e.textContent)).filter(t=>t&&!NON_SERVICE.test(t)).slice(0,12);
+  if(h2.length)p.services=h2.map(name=>({name}));
+  return p;
+}
+
+function mergeFacts(base,facts){
+  const m=Object.assign({},base,facts);
+  for(const k of["services","products","faqs","actions","hours","keywords"]) if(facts[k]&&facts[k].length)m[k]=facts[k];
+  if(facts.address)m.address=Object.assign({},base.address,facts.address);
+  if(facts.socials)m.socials=Object.assign({},base.socials,facts.socials);
+  m.sources=[...(base.sources||[]),"facts:supplied"];
+  return m;
+}
+
+// ---------- generators ----------
+function buildJsonLd(p){
+  const g=[];
+  const b=prune({"@type":p.schemaType||"LocalBusiness",dateModified:new Date().toISOString().slice(0,10),name:p.name,description:p.description,slogan:p.tagline,url:p.url,email:p.email?("mailto:"+p.email):undefined,telephone:p.phone,priceRange:p.priceRange,keywords:(p.keywords||[]).join(", "),areaServed:p.areaServed,
+    address:p.address?prune({"@type":"PostalAddress",streetAddress:p.address.street,addressLocality:p.address.city,addressRegion:p.address.region,postalCode:p.address.postalCode,addressCountry:p.address.country}):undefined,
+    openingHoursSpecification:(p.hours||[]).map(h=>({"@type":"OpeningHoursSpecification",dayOfWeek:h.days,opens:h.opens,closes:h.closes})),
+    makesOffer:(p.services||[]).map(s=>prune({"@type":"Offer",itemOffered:{"@type":"Service",name:s.name,description:s.description},priceSpecification:s.price?{"@type":"PriceSpecification",price:s.price}:undefined}))});
+  g.push(b);
+  if((p.faqs||[]).length)g.push({"@type":"FAQPage",mainEntity:p.faqs.map(f=>({"@type":"Question",name:f.question,acceptedAnswer:{"@type":"Answer",text:f.answer}}))});
+  return {"@context":"https://schema.org","@graph":g};
+}
+function buildLlms(p){
+  const o=[];o.push("# "+p.name);o.push("");
+  if(p.tagline||p.description){o.push("> "+(p.tagline||p.description));o.push("");}
+  if(p.tagline&&p.description){o.push(p.description);o.push("");}
+  const line=(l,v)=>v?("- **"+l+":** "+v):null;
+  const addr=p.address?[p.address.street,p.address.city,p.address.region,p.address.postalCode,p.address.country].filter(Boolean).join(", "):"";
+  const facts=[line("Website",p.url),line("Phone",p.phone),line("Email",p.email),line("Address",addr),line("Price range",p.priceRange),line("Areas served",(p.areaServed||[]).join(", "))].filter(Boolean);
+  if(facts.length){o.push("## Contact & details");o.push(...facts);o.push("");}
+  if((p.hours||[]).length){o.push("## Hours");p.hours.forEach(h=>o.push("- "+h.days.join(", ")+": "+h.opens+"–"+h.closes));o.push("");}
+  if((p.services||[]).length){o.push("## Services");p.services.forEach(s=>o.push("- **"+s.name+"**"+(s.price?(" — "+s.price):"")+(s.description?(": "+s.description):"")));o.push("");}
+  if((p.actions||[]).length){o.push("## What an agent can do here");p.actions.forEach(a=>o.push("- **"+a.name+"** ("+a.kind+"): "+a.description));o.push("See `/agents.json` for machine-readable action definitions.");o.push("");}
+  if((p.faqs||[]).length){o.push("## FAQ");p.faqs.forEach(f=>{o.push("**Q: "+f.question+"**");o.push("A: "+f.answer);o.push("");});}
+  o.push("## Machine-readable resources");o.push("- [Structured business data](/api/business.json)");o.push("- [Agent actions](/agents.json)");o.push("- [Full details](/llms-full.txt)");o.push("");
+  return o.join("\n");
+}
+function buildAgents(p){
+  const actions=[...(p.actions||[])];
+  if(p.email)actions.push({name:"Contact by email",kind:"contact",description:"Email "+p.name+" directly.",endpoint:"mailto:"+p.email,method:"GET"});
+  if(p.phone)actions.push({name:"Call",kind:"contact",description:"Phone "+p.name+".",endpoint:"tel:"+p.phone.replace(/[^+\d]/g,""),method:"GET"});
+  return prune({schemaVersion:"beacon/0.1",business:{name:p.name,url:p.url,description:p.description},
+    resources:prune({profile:"/api/business.json",services:(p.services||[]).length?"/api/services.json":undefined,llms:"/llms.txt"}),
+    actions:actions.map(a=>prune({name:a.name,kind:a.kind,description:a.description,endpoint:a.endpoint,method:a.method||"POST",parameters:a.params}))});
+}
+function buildIndexHtml(p,mode){
+  const sec=[];const esc=escapeHtml;
+  if(p.description)sec.push("<section><h2>About</h2><p>"+esc(p.description)+"</p></section>");
+  const c=[];if(p.phone)c.push("<p>Phone: <a href=\"tel:"+esc(p.phone)+"\">"+esc(p.phone)+"</a></p>");if(p.email)c.push("<p>Email: <a href=\"mailto:"+esc(p.email)+"\">"+esc(p.email)+"</a></p>");
+  if(p.address){const a=[p.address.street,p.address.city,p.address.region,p.address.postalCode,p.address.country].filter(Boolean).map(esc);c.push("<address>"+a.join(", ")+"</address>");}
+  if(c.length)sec.push("<section><h2>Contact</h2>"+c.join("")+"</section>");
+  if((p.services||[]).length)sec.push("<section><h2>Services</h2><ul>"+p.services.map(s=>"<li><strong>"+esc(s.name)+"</strong>"+(s.price?(" — "+esc(s.price)):"")+(s.description?("<br><small>"+esc(s.description)+"</small>"):"")+"</li>").join("")+"</ul></section>");
+  if((p.faqs||[]).length)sec.push("<section><h2>FAQ</h2>"+p.faqs.map(f=>"<details><summary>"+esc(f.question)+"</summary><p>"+esc(f.answer)+"</p></details>").join("")+"</section>");
+  const jsonld="<script type=\"application/ld+json\">\n"+JSON.stringify(buildJsonLd(p),null,2)+"\n<\/script>";
+  return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>'+esc(p.name)+(p.tagline?(" — "+esc(p.tagline)):"")+'</title>\n<meta name="description" content="'+esc(p.description||p.name)+'">\n<link rel="alternate" type="text/plain" href="/llms.txt">\n<link rel="alternate" type="application/json" href="/agents.json">\n'+jsonld+'\n</head>\n<body>\n<main>\n<header><h1>'+esc(p.name)+'</h1>'+(p.tagline?("<p><em>"+esc(p.tagline)+"</em></p>"):"")+'</header>\n'+sec.join("\n")+'\n</main>\n</body>\n</html>';
+}
+
+// ---------- audit ----------
+function pct(checks){let g=0,m=0;for(const c of checks){g+=c.weight*c.score;m+=c.weight;}return Math.round(g/m*100);}
+function auditAfter(files,p){
+  const map=Object.fromEntries(files.map(f=>[f.path,f.content]));
+  const index=map["index.html"]||"",llms=map["llms.txt"]||"";const text=htmlToText(index);
+  const agents=map["agents.json"];let acts=0;try{acts=(JSON.parse(agents).actions||[]).length;}catch(e){}
+  const checks=[
+    {label:"llms.txt present",weight:16,score:llms?1:0},
+    {label:"JSON-LD structured data",weight:22,score:/application\/ld\+json/.test(index)?((p.phone||p.email||p.address)?1:0.6):0},
+    {label:"Full content in raw HTML (no JS)",weight:16,score:text.length>400?1:text.length>150?0.5:0},
+    {label:"Machine-readable JSON API",weight:15,score:map["api/business.json"]?1:0},
+    {label:"agents.json actions",weight:16,score:agents?(acts>0?1:0.5):0},
+    {label:"robots.txt + sitemap.xml",weight:7,score:(map["robots.txt"]?0.5:0)+(map["sitemap.xml"]?0.5:0)},
+    {label:"In-page discovery hints",weight:8,score:(/rel="alternate"[^>]+llms\.txt/.test(index)?0.5:0)+(/<meta name="description"/.test(index)?0.5:0)},
+  ];
+  return {score:pct(checks),checks};
+}
+function auditBefore(html){
+  const text=htmlToText(html);
+  const checks=[
+    {label:"llms.txt present",weight:16,score:0},
+    {label:"JSON-LD structured data",weight:22,score:/application\/ld\+json/.test(html)?(/"(telephone|email|address)"/.test(html)?1:0.6):0},
+    {label:"Full content in raw HTML (no JS)",weight:16,score:text.length>400?1:text.length>150?0.5:0},
+    {label:"Machine-readable JSON API",weight:15,score:0},
+    {label:"agents.json actions",weight:16,score:0},
+    {label:"robots.txt + sitemap.xml",weight:7,score:0},
+    {label:"In-page discovery hints",weight:8,score:/<meta name="description"/i.test(html)?0.5:0},
+  ];
+  return {score:pct(checks),checks};
+}
+
+// ---------- assemble ----------
+function assemble(p,mode){
+  const agents=JSON.stringify(buildAgents(p),null,2);
+  const files=[
+    {path:"index.html",content:buildIndexHtml(p,mode)},
+    {path:"llms.txt",content:buildLlms(p)},
+    {path:"agents.json",content:agents},
+    {path:".well-known/agents.json",content:agents},
+    {path:"robots.txt",content:"User-agent: *\nAllow: /\n"},
+    {path:"sitemap.xml",content:'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9"><url><loc>/</loc><lastmod>'+new Date().toISOString().slice(0,10)+'</loc></url></urlset>'},
+    {path:"api/business.json",content:JSON.stringify(prune(Object.assign({},p)),null,2)},
+  ];
+  if((p.services||[]).length)files.push({path:"api/services.json",content:JSON.stringify({services:p.services},null,2)});
+  if((p.faqs||[]).length)files.push({path:"api/faqs.json",content:JSON.stringify({faqs:p.faqs},null,2)});
+  return files;
+}
+
+// ---------- UI ----------
+const $=id=>document.getElementById(id);
+$("build").addEventListener("click",()=>{
+  const html=$("html").value;
+  const mode=document.querySelector('input[name=mode]:checked').value;
+  let facts={};
+  if($("facts").value.trim()){try{facts=JSON.parse($("facts").value);}catch(e){return showErr("Facts must be valid JSON. "+e.message);}}
+  if(!html.trim()&&!Object.keys(facts).length)return showErr("Paste some HTML or add facts (with at least a name).");
+  let p=html.trim()?extract(html):{sources:[]};
+  if(Object.keys(facts).length)p=mergeFacts(p,facts);
+  if(!p.name)return showErr('Couldn’t find a business name. Add it in Facts, e.g. { "name": "Acme Co." }');
+  const files=assemble(p,mode);
+  const after=auditAfter(files,p);
+  const before=html.trim()?auditBefore(html):null;
+  render(p,files,after,before);
+});
+
+function showErr(m){$("result").innerHTML='<div class="err">'+escapeHtml(m)+'</div>';}
+
+function grade(s){return s>=0.99?"✅":s>=0.5?"🟡":"❌";}
+
+function render(p,files,after,before){
+  const scoreLine=before?('<span class="score">'+before.score+" → "+after.score+"</span> / 100 agent-readiness")
+    :('<span class="score">'+after.score+"</span> / 100 agent-readiness");
+  let table='<table><tr><th>Check</th>'+(before?"<th>Before</th>":"")+"<th>Beacon</th></tr>";
+  after.checks.forEach((c,i)=>{table+="<tr><td>"+escapeHtml(c.label)+"</td>"+(before?("<td>"+grade(before.checks[i].score)+"</td>"):"")+"<td>"+grade(c.score)+"</td></tr>";});
+  table+="</table>";
+  // tabs of files
+  const tabBtns=files.map((f,i)=>'<button data-i="'+i+'"'+(i===0?' class="active"':'')+'>'+escapeHtml(f.path)+'</button>').join("");
+  const panes=files.map((f,i)=>'<pre class="pane'+(i===0?'':' hide')+'" data-i="'+i+'">'+escapeHtml(f.content)+'</pre>').join("");
+  $("result").innerHTML='<h2>'+escapeHtml(p.name)+'</h2><p>'+scoreLine+'</p>'+table+
+    '<h3>Generated files</h3><div class="tabs">'+tabBtns+'</div>'+panes+
+    '<h3>Live preview of the agent-site</h3><iframe style="width:100%;height:360px;border:1px solid #8884;border-radius:6px;background:#fff" srcdoc="'+escapeHtml(files[0].content)+'"></iframe>';
+  $("result").querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{
+    const i=b.getAttribute("data-i");
+    $("result").querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");
+    $("result").querySelectorAll(".pane").forEach(x=>x.classList.toggle("hide",x.getAttribute("data-i")!==i));
+  }));
+  $("result").scrollIntoView({behavior:"smooth"});
+}
+</script>
+</body>
+</html>
