@@ -44,6 +44,30 @@ actions, crawl signals, discovery hints) is graded with the reason an agent care
 plus the token-cost saving for an agent to read the business. Deterministic —
 nothing to take on faith. This is the artifact you put in front of a prospect.
 
+### The outcome demo: A/B agent eval
+
+The score proves *capability*. The eval proves *outcome* — that an AI actually
+answers a customer's questions better, and cheaper, from the Beacon site:
+
+```bash
+npm install && export ANTHROPIC_API_KEY=sk-ant-...
+node src/cli.ts ./current-site --out out/acme        # build the Beacon site
+node src/eval-cli.ts ./current-site out/acme          # A/B eval → out/acme/agent-eval.md
+```
+
+It derives real buyer questions from the business's facts (so there's ground
+truth), has a model answer each from **only the current site** then **only the
+Beacon site** (saying NOT FOUND when the source lacks the answer — no guessing),
+and a judge grades both. Output:
+
+```
+## Buyer questions answered correctly: 30% → 100%
+Tokens the AI spent reading the business: 5,200 → 1,600 — 69% cheaper.
+```
+
+That's the money quote for a sales deck. (Needs an API key, like `--enrich`;
+degrades gracefully without one.)
+
 ## Two modes
 
 - **`companion`** *(default)* — point Beacon at a business's existing site (plus any
@@ -131,6 +155,7 @@ statically-hostable bundle. Verified end-to-end on the bundled examples.
 
 - Smarter extraction (cheerio/readability) and richer service/product detection
 - ~~LLM-assisted content enrichment~~ — done, see `--enrich` above
+- ~~Proof: agent-readiness score + A/B answer-quality eval~~ — done
 - A live MCP server per business so agents can call actions directly
 - `agents.json` execution layer (actually perform quotes/bookings)
 - Deploy command (push the bundle to Vercel/Netlify/S3)

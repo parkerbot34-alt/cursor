@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/cli.ts",
     "demo": "node src/cli.ts --facts examples/sample-business.json --no-fetch --out out/demo",
-    "demo:ingest": "node src/cli.ts examples/sample-site --mode upgrade --out out/ingest-demo"
+    "demo:ingest": "node src/cli.ts examples/sample-site --mode upgrade --out out/ingest-demo",
+    "eval": "node src/eval-cli.ts"
   },
   "engines": {
     "node": ">=22.6.0"
