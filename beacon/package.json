@@ -1,0 +1,33 @@
+{
+  "name": "beacon",
+  "version": "0.1.0",
+  "description": "Build a website that an AI agent can actually read and act on. Agent-first sites for businesses.",
+  "type": "module",
+  "bin": {
+    "beacon": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "node src/cli.ts",
+    "demo": "node src/cli.ts --facts examples/sample-business.json --no-fetch --out out/demo",
+    "demo:ingest": "node src/cli.ts examples/sample-site --mode upgrade --out out/ingest-demo",
+    "eval": "node src/eval-cli.ts",
+    "ui": "node src/server.ts"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "//optionalDependencies": "Only needed for the --enrich (Claude) pass; Beacon's core runs with zero dependencies.",
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.105.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "llms-txt",
+    "schema-org",
+    "structured-data",
+    "agentic-web",
+    "seo"
+  ],
+  "license": "MIT"
+}

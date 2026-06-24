@@ -1,0 +1,180 @@
+#!/usr/bin/env node
+// Beacon CLI — generate an agent-first website for a business.
+//
+//   node src/cli.ts <url> [options]
+//
+// Modes:
+//   --mode companion   build a SEPARATE agent-only site alongside the human site (default)
+//   --mode upgrade     rebuild the EXISTING site into an agent-friendly version
+//
+// Options:
+//   --facts <file>     JSON file of asserted business facts (merged over the crawl; facts win)
+//   --out <dir>        output directory (default: ./out)
+//   --no-fetch         skip crawling; build purely from --facts
+//
+// Either a <url> or --facts (or both) is required.
+
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { BuildMode, BusinessProfile } from "./types.ts";
+import { combineExtractions, extractFromHtml, loadPages, mergeProfiles } from "./ingest.ts";
+import { enrichProfile } from "./enrich.ts";
+import { assembleBundle, writeBundle } from "./build.ts";
+import { auditBundle, auditRawSite, renderReport } from "./audit.ts";
+import { htmlToText } from "./util.ts";
+
+interface Args {
+  url?: string;
+  mode: BuildMode;
+  facts?: string;
+  out: string;
+  fetch: boolean;
+  enrich: boolean;
+}
+
+function parseArgs(argv: string[]): Args {
+  const args: Args = { mode: "companion", out: "out", fetch: true, enrich: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--mode") args.mode = argv[++i] as BuildMode;
+    else if (a === "--facts") args.facts = argv[++i];
+    else if (a === "--out") args.out = argv[++i];
+    else if (a === "--no-fetch") args.fetch = false;
+    else if (a === "--enrich") args.enrich = true;
+    else if (a === "-h" || a === "--help") {
+      printHelp();
+      process.exit(0);
+    } else if (!a.startsWith("-")) args.url = a;
+    else {
+      console.error(`Unknown option: ${a}`);
+      process.exit(1);
+    }
+  }
+  if (args.mode !== "companion" && args.mode !== "upgrade") {
+    console.error(`--mode must be "companion" or "upgrade"`);
+    process.exit(1);
+  }
+  return args;
+}
+
+function printHelp(): void {
+  console.log(`Beacon — build a website that an AI agent can actually read and act on.
+
+Usage:
+  node src/cli.ts <input> [--mode companion|upgrade] [--facts facts.json] [--out dir] [--no-fetch]
+
+<input> can be:
+  • a folder  — a saved/exported website; every .html page is read & aggregated
+  • a file    — a single saved .html page (or file:// URL)
+  • a URL     — a live http(s) site to crawl
+
+Modes:
+  companion  Separate agent-only site alongside the existing human site (default)
+  upgrade    Rebuild the existing site into an agent-friendly version
+
+Options:
+  --enrich   Use Claude to clean the crawled content into a polished profile
+             (needs ANTHROPIC_API_KEY + \`npm install\`; falls back to the
+             deterministic output if unavailable). Facts still win over it.
+
+Examples:
+  node src/cli.ts ./acme-website-export --mode upgrade --out out/acme
+  node src/cli.ts ./acme-website-export --facts extra.json --mode companion --out out/acme
+  node src/cli.ts https://acme.example --mode companion --out out/acme
+  node src/cli.ts --facts examples/sample-business.json --no-fetch --out out/demo
+`);
+}
+
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (!args.url && !args.facts) {
+    console.error("Error: provide a <url>, --facts <file>, or both.\n");
+    printHelp();
+    process.exit(1);
+  }
+
+  let profile: Partial<BusinessProfile> = {};
+  const notes: string[] = [];
+  let sourceHtml: string[] = []; // raw original pages, for the "before" audit
+
+  if (args.url) {
+    const isHttp = /^https?:\/\//i.test(args.url);
+    if (isHttp && args.fetch) process.stderr.write(`Crawling ${args.url} …\n`);
+    else if (!isHttp) process.stderr.write(`Reading dropped-in site: ${args.url} …\n`);
+
+    const { pages, notes: loadNotes } = await loadPages(args.url, args.fetch);
+    notes.push(...loadNotes);
+    sourceHtml = pages.map((pg) => pg.html);
+
+    if (pages.length) {
+      const results = pages.map((pg) => extractFromHtml(pg.html, pg.ref));
+      const combined = combineExtractions(results, isHttp ? args.url : undefined);
+      profile = combined.profile;
+      notes.push(...combined.notes);
+      if (pages.length > 1) {
+        notes.push(`Aggregated facts across ${pages.length} pages into one profile.`);
+      }
+
+      // Enrich the crawl BEFORE facts are merged, so asserted facts win.
+      if (args.enrich) {
+        process.stderr.write("Enriching with Claude …\n");
+        const pageText = pages.map((pg) => htmlToText(pg.html)).join("\n\n");
+        const { profile: enriched, notes: enrichNotes } = await enrichProfile(profile, pageText);
+        profile = enriched;
+        notes.push(...enrichNotes);
+      }
+    } else {
+      profile = { url: isHttp ? args.url : undefined, sources: [`load-failed:${args.url}`] };
+    }
+  } else if (args.enrich) {
+    notes.push("Enrichment needs a website to read (a URL, file, or folder); skipped for facts-only build.");
+  }
+
+  if (args.facts) {
+    const raw = await readFile(args.facts, "utf8");
+    const facts = JSON.parse(raw) as Partial<BusinessProfile>;
+    profile = mergeProfiles(profile, facts);
+    notes.push(`Merged asserted facts from ${args.facts}.`);
+  }
+
+  if (!profile.name) {
+    console.error(
+      "\nError: no business name could be determined. Supply --facts with at least { \"name\": \"…\" }.",
+    );
+    process.exit(1);
+  }
+
+  const final = profile as BusinessProfile;
+  if (args.mode === "companion" && final.url) final.agentUrl ||= undefined;
+
+  const files = assembleBundle(final, args.mode);
+  await writeBundle(files, args.out);
+
+  // Agent-readiness proof: score the Beacon site, and the original if we have it.
+  const beaconReport = auditBundle(files, final);
+  const beforeReport = sourceHtml.length ? auditRawSite(sourceHtml) : undefined;
+  const report = renderReport(beaconReport, beforeReport);
+  await writeFile(join(args.out, "beacon-report.md"), report, "utf8");
+  await writeFile(
+    join(args.out, "beacon-report.json"),
+    JSON.stringify({ before: beforeReport, after: beaconReport }, null, 2),
+    "utf8",
+  );
+
+  process.stderr.write("\n");
+  for (const n of notes) process.stderr.write(`  • ${n}\n`);
+  process.stderr.write(`\n✓ Built ${files.length} files (mode: ${args.mode}) → ${args.out}/\n`);
+  for (const f of files) process.stderr.write(`    ${args.out}/${f.path}\n`);
+  process.stderr.write(`    ${args.out}/beacon-report.md\n`);
+  if (beforeReport) {
+    process.stderr.write(`\n  ★ Agent-readiness: ${beforeReport.score}/100 (current site) → ${beaconReport.score}/100 (Beacon)\n`);
+  } else {
+    process.stderr.write(`\n  ★ Agent-readiness score: ${beaconReport.score}/100\n`);
+  }
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

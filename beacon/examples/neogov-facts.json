@@ -1,0 +1,21 @@
+{
+  "name": "NEOGOV",
+  "tagline": "HR, payroll, and talent software purpose-built for the public sector",
+  "description": "NEOGOV provides a human capital management (HCM) platform designed specifically for government and public-sector agencies. It helps cities, counties, states, schools, and public-safety organizations recruit, onboard, train, manage, and pay their workforce in one connected system.",
+  "schemaType": "Organization",
+  "url": "https://www.neogov.com",
+  "areaServed": ["United States public sector", "State & local government", "K-12 and higher education", "Public safety", "Special districts"],
+  "keywords": ["government HR software", "public sector HCM", "applicant tracking", "onboarding", "performance management", "public sector payroll", "policy management"],
+  "services": [
+    { "name": "Recruiting & applicant tracking (Insight)", "description": "Post jobs, manage applicants, and hire for public-sector roles, integrated with GovernmentJobs.com." },
+    { "name": "Onboarding (Onboard)", "description": "Digitize new-hire paperwork and onboarding workflows for government employees." },
+    { "name": "Performance management (Perform)", "description": "Run employee evaluations and track performance for public-sector teams." },
+    { "name": "Learning & training (Learn)", "description": "Deliver online training and compliance courses to government staff." },
+    { "name": "HR & payroll", "description": "Manage core HR records and public-sector payroll." },
+    { "name": "Policy & compliance management (PowerDMS)", "description": "Manage policies, accreditation, and compliance, widely used in public safety." }
+  ],
+  "faqs": [
+    { "question": "Who is NEOGOV for?", "answer": "Government and public-sector organizations — state and local agencies, cities, counties, K-12 and higher education, and public-safety departments." },
+    { "question": "What does NEOGOV do?", "answer": "It provides an all-in-one human capital management platform to recruit, onboard, train, manage, and pay public-sector employees." }
+  ]
+}

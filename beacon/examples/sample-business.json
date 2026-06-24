@@ -1,0 +1,62 @@
+{
+  "name": "Northside Plumbing Co.",
+  "tagline": "Fast, honest plumbing for the whole metro",
+  "description": "Family-owned plumbing company serving the Northside metro since 1998. Licensed, insured, and available for emergencies 24/7.",
+  "schemaType": "Plumber",
+  "url": "https://northsideplumbing.example",
+  "email": "dispatch@northsideplumbing.example",
+  "phone": "+1-555-0142",
+  "priceRange": "$$",
+  "address": {
+    "street": "412 Birch Ave",
+    "city": "Riverton",
+    "region": "OH",
+    "postalCode": "45001",
+    "country": "US"
+  },
+  "areaServed": ["Riverton", "Northside", "Maple Heights"],
+  "hours": [
+    { "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], "opens": "07:00", "closes": "18:00" },
+    { "days": ["Saturday"], "opens": "08:00", "closes": "14:00" }
+  ],
+  "services": [
+    { "name": "Emergency leak repair", "description": "24/7 response for burst pipes and major leaks.", "price": "from $150" },
+    { "name": "Water heater install", "description": "Tank and tankless installation, all major brands.", "price": "from $1,200" },
+    { "name": "Drain cleaning", "description": "Camera inspection and hydro-jetting.", "price": "from $120" }
+  ],
+  "faqs": [
+    { "question": "Do you offer 24/7 emergency service?", "answer": "Yes — call our dispatch line any time and we aim to be on-site within 90 minutes in the metro area." },
+    { "question": "Are you licensed and insured?", "answer": "Yes. We are fully licensed in Ohio (lic. #PL-44821) and carry $2M liability insurance." }
+  ],
+  "socials": {
+    "facebook": "https://facebook.com/northsideplumbing",
+    "google": "https://g.page/northsideplumbing"
+  },
+  "actions": [
+    {
+      "name": "Request a quote",
+      "kind": "quote",
+      "description": "Submit a job description and contact details to receive a written quote.",
+      "endpoint": "https://northsideplumbing.example/api/quote",
+      "method": "POST",
+      "params": [
+        { "name": "name", "type": "string", "required": true, "description": "Customer name" },
+        { "name": "phone", "type": "tel", "required": true },
+        { "name": "job", "type": "string", "required": true, "description": "Description of the plumbing job" },
+        { "name": "urgent", "type": "boolean", "required": false, "description": "Whether this is an emergency" }
+      ]
+    },
+    {
+      "name": "Book a service window",
+      "kind": "book",
+      "description": "Schedule a non-emergency visit in an available time window.",
+      "endpoint": "https://northsideplumbing.example/api/book",
+      "method": "POST",
+      "params": [
+        { "name": "name", "type": "string", "required": true },
+        { "name": "phone", "type": "tel", "required": true },
+        { "name": "date", "type": "date", "required": true, "description": "Preferred date" }
+      ]
+    }
+  ]
+}
